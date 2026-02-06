@@ -1,0 +1,28 @@
+name: Fabrica de APK
+on: [push]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Baixar Código
+        uses: actions/checkout@v3
+
+      - name: Instalar Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Instalar Ferramentas
+        run: |
+          pip install flet
+          pip install -r requirements.txt
+
+      - name: Fabricar APK (Isso demora uns 5min)
+        run: flet build apk --no-android-signing
+
+      - name: Guardar o APK pronto
+        uses: actions/upload-artifact@v4
+        with:
+          name: aplicativo-tanque
+          path: build/apk/app-release.apk
