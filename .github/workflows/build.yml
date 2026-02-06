@@ -8,7 +8,7 @@ jobs:
       - name: Baixar Código
         uses: actions/checkout@v4
 
-      - name: Instalar Java (Obrigatório para Android)
+      - name: Instalar Java 17
         uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
@@ -24,16 +24,16 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: Instalar o Flet
+      - name: Instalar Flet e Dependências
         run: |
           pip install flet
           if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
 
-      - name: Fabricar o APK
-        run: flet build apk --no-android-signing --include-packages flet
+      - name: Fabricar o APK (Comando Novo)
+        run: flet build apk
 
       - name: Guardar o APK pronto
         uses: actions/upload-artifact@v4
         with:
-          name: app-tanque-v2
+          name: app-tanque-v3
           path: build/apk/app-release.apk
