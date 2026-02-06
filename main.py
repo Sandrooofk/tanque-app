@@ -3,253 +3,205 @@ import csv
 import os
 
 def main(page: ft.Page):
-    # --- CONFIGURAÇÃO VISUAL ---
+    # --- 1. CONFIGURAÇÃO INICIAL (Leve para não travar) ---
     page.title = "Posto Controle"
     page.theme_mode = ft.ThemeMode.DARK
     page.bgcolor = "#1f1f1f"
     page.padding = 20
     page.scroll = "AUTO"
 
-    # --- NOMES EXATOS (Confirmados pelo Diagnóstico) ---
-    ARQUIVO_60K = "tabela_tanque(in).csv"
-    ARQUIVO_15K = "tabela_15000L 1(in).csv" # Atenção ao espaço antes do 1
-    ARQUIVO_30K = "tabela_30000L(in).csv"
-
-    # Mapa de qual tanque usa qual arquivo
+    # Variáveis globais
+    banco_dados = {}
     CONFIG_TANQUES = {
-        "T01 - Diesel S500": ARQUIVO_60K,
-        "T02A - Diesel S10 (Lado A)": ARQUIVO_60K,
-        "T02B - Diesel S10 (Lado B)": ARQUIVO_60K,
-        "T04 - Gas. Aditivada": ARQUIVO_15K,
-        "T05 - Gas. Comum": ARQUIVO_30K,
-        "📊 SOMA TOTAL S10 (A+B)": ARQUIVO_60K
+        "T01 - Diesel S500": "tabela_tanque(in).csv",
+        "T02A - Diesel S10 (Lado A)": "tabela_tanque(in).csv",
+        "T02B - Diesel S10 (Lado B)": "tabela_tanque(in).csv",
+        "T04 - Gas. Aditivada": "tabela_15000L 1(in).csv",
+        "T05 - Gas. Comum": "tabela_30000L(in).csv",
+        "📊 SOMA TOTAL S10 (A+B)": "tabela_tanque(in).csv"
     }
 
-    # Memória do app
-    banco_dados = {}
-    
-    # Campo para avisos (caso algum arquivo falhe)
-    txt_status = ft.Text("Sistema pronto.", color="grey", size=12)
+    # --- 2. FUNÇÃO QUE CARREGA TUDO (Só roda quando clicar) ---
+    def abrir_sistema(e):
+        btn_entrar.text = "Carregando tabelas..."
+        btn_entrar.disabled = True
+        page.update()
 
-    # --- 1. FUNÇÃO DE CARREGAMENTO (Executada DEPOIS da tela abrir) ---
-    def carregar_arquivos_seguro():
+        # Limpa a tela inicial
+        page.clean()
+        
+        # Reconstrói a interface completa
+        montar_interface_principal()
+        
+        # Carrega os dados
+        carregar_dados_agora()
+
+    # --- 3. LÓGICA DE CARREGAMENTO (Blindada) ---
+    def carregar_dados_agora():
         try:
-            # Pega a pasta atual (confirmado pelo diagnóstico)
+            # Pega o caminho confirmado pelo diagnóstico
             pasta_assets = os.path.join(os.getcwd(), "assets")
+            if not os.path.exists(pasta_assets):
+                # Tenta plano B
+                pasta_assets = "assets"
+
+            arquivos_lidos = 0
             
-            arquivos_encontrados = 0
-            erros_leitura = []
+            # Lista exata dos seus arquivos
+            lista_arquivos = [
+                "tabela_tanque(in).csv",
+                "tabela_15000L 1(in).csv",
+                "tabela_30000L(in).csv"
+            ]
 
-            # Lista única de arquivos para carregar
-            lista_arquivos = [ARQUIVO_60K, ARQUIVO_15K, ARQUIVO_30K]
-
-            for nome_arquivo in lista_arquivos:
-                caminho = os.path.join(pasta_assets, nome_arquivo)
-                
+            for nome in lista_arquivos:
+                caminho = os.path.join(pasta_assets, nome)
                 try:
                     dados_tanque = {}
-                    # Tenta abrir (utf-8-sig para acentos)
                     if os.path.exists(caminho):
                         with open(caminho, mode='r', encoding='utf-8-sig') as f:
-                            # Tenta ler com ponto e vírgula
                             leitor = csv.reader(f, delimiter=';')
-                            next(leitor, None) # Pula cabeçalho
-                            
+                            next(leitor, None)
                             for linha in leitor:
                                 if len(linha) >= 2:
                                     try:
-                                        cm = int(linha[0])
-                                        # Trata 1.000 ou 1000,00
-                                        litros = int(float(linha[1].replace('.', '').replace(',', '.')))
-                                        dados_tanque[cm] = litros
+                                        c = int(linha[0])
+                                        v = int(float(linha[1].replace('.', '').replace(',', '.')))
+                                        dados_tanque[c] = v
                                     except: continue
-                        
                         if dados_tanque:
-                            banco_dados[nome_arquivo] = dados_tanque
-                            arquivos_encontrados += 1
-                        else:
-                            erros_leitura.append(f"{nome_arquivo} (Vazio)")
-                    else:
-                        erros_leitura.append(f"{nome_arquivo} (Não achado)")
-
-                except Exception as e:
-                    erros_leitura.append(f"{nome_arquivo} (Erro: {str(e)})")
-
-            # Atualiza o status na tela
-            if erros_leitura:
-                txt_status.value = f"Alerta: Problema em {', '.join(erros_leitura)}"
-                txt_status.color = "orange"
-            else:
-                txt_status.value = f"Sucesso! {arquivos_encontrados} tabelas carregadas."
-                txt_status.color = "green"
+                            banco_dados[nome] = dados_tanque
+                            arquivos_lidos += 1
+                except: pass
             
+            # Atualiza status na nova tela
+            if arquivos_lidos > 0:
+                txt_status.value = f"Sistema Online ({arquivos_lidos} tabelas)"
+                txt_status.color = "green"
+            else:
+                txt_status.value = "Erro: Nenhuma tabela carregada"
+                txt_status.color = "red"
             page.update()
 
-        except Exception as e:
-            txt_status.value = f"Erro Geral: {str(e)}"
-            txt_status.color = "red"
+        except Exception as ex:
+            txt_status.value = f"Erro Geral: {str(ex)}"
             page.update()
 
-    # --- 2. LÓGICA DE CÁLCULO ---
+    # --- 4. INTERFACE PRINCIPAL ---
+    def montar_interface_principal():
+        # Cabeçalho
+        page.add(
+            ft.Container(
+                content=ft.Column([
+                    ft.Text("Controle de Estoque", size=22, weight="bold", color="white"),
+                    txt_status
+                ]),
+                margin=ft.margin.only(bottom=10)
+            )
+        )
+        
+        # Adiciona os controles
+        page.add(dropdown_tanques)
+        page.add(ft.Container(height=10))
+        page.add(txt_regua_1)
+        page.add(container_soma) # Invisível por padrão
+        page.add(ft.Container(height=20))
+        page.add(btn_calcular)
+        page.add(ft.Container(height=20))
+        page.add(card_resultado)
+
+    # --- 5. COMPONENTES (Definidos aqui para usar depois) ---
+    txt_status = ft.Text("Carregando...", color="grey", size=12)
+
     def mudar_dropdown(e):
-        opcao = dropdown_tanques.value
-        if "SOMA TOTAL" in opcao:
+        op = dropdown_tanques.value
+        if "SOMA" in op:
             container_soma.visible = True
             txt_regua_1.label = "Régua T02A (cm)"
-            btn_calcular.text = "CALCULAR TOTAL SISTEMA"
+            btn_calcular.text = "CALCULAR TOTAL"
         else:
             container_soma.visible = False
             txt_regua_1.label = "Régua (cm)"
-            btn_calcular.text = "CONSULTAR VOLUME"
-        
+            btn_calcular.text = "CONSULTAR"
         card_resultado.visible = False
         page.update()
 
     def calcular(e):
-        opcao = dropdown_tanques.value
-        if not opcao: 
-            txt_status.value = "Selecione um tanque primeiro"
-            txt_status.color = "red"
-            page.update()
-            return
-
-        arquivo_alvo = CONFIG_TANQUES.get(opcao)
-        tabela = banco_dados.get(arquivo_alvo)
-
-        if not tabela:
+        op = dropdown_tanques.value
+        if not op: return
+        
+        nome_arq = CONFIG_TANQUES.get(op)
+        tab = banco_dados.get(nome_arq)
+        
+        if not tab:
             lbl_total.value = "Erro Tabela"
-            lbl_desc.value = f"Arquivo {arquivo_alvo} não carregou"
-            lbl_total.color = "#ff4d4d" # Vermelho
             card_resultado.visible = True
             page.update()
             return
 
         try:
-            if "SOMA TOTAL" in opcao:
-                val_1 = txt_regua_1.value
-                val_2 = txt_regua_2.value
-                
-                if not val_1 or not val_2:
-                    lbl_total.value = "Digite as duas réguas"
-                    lbl_total.size = 20
-                    card_resultado.visible = True
-                    page.update()
-                    return
-
-                cm_a = int(val_1)
-                cm_b = int(val_2)
-                
-                vol_a = tabela.get(cm_a, 0)
-                vol_b = tabela.get(cm_b, 0)
-                total = vol_a + vol_b
-                
+            if "SOMA" in op:
+                if not txt_regua_1.value or not txt_regua_2.value: return
+                r1 = int(txt_regua_1.value)
+                r2 = int(txt_regua_2.value)
+                total = tab.get(r1, 0) + tab.get(r2, 0)
                 lbl_total.value = f"{total} Litros"
-                lbl_total.size = 40
-                lbl_desc.value = "Total Sistema (Físico + Contábil)"
-                lbl_detalhe.value = f"Lado A: {vol_a} L  |  Lado B: {vol_b} L"
-                lbl_total.color = "#007bff" # Azul
-
+                lbl_detalhe.value = f"A: {tab.get(r1,0)} | B: {tab.get(r2,0)}"
             else:
                 if not txt_regua_1.value: return
-                cm = int(txt_regua_1.value)
-                vol = tabela.get(cm)
-                
+                r1 = int(txt_regua_1.value)
+                vol = tab.get(r1)
                 if vol is not None:
                     lbl_total.value = f"{vol} Litros"
-                    lbl_total.size = 40
-                    lbl_desc.value = "Volume em Estoque"
-                    lbl_detalhe.value = f"Tanque: {opcao.split(' - ')[0]}"
-                    lbl_total.color = "#007bff"
+                    lbl_detalhe.value = "Estoque Físico"
                 else:
                     lbl_total.value = "Não Tabelado"
-                    lbl_total.size = 30
-                    lbl_desc.value = "Medida fora da tabela"
-                    lbl_detalhe.value = "Verifique a régua novamente"
-                    lbl_total.color = "orange"
-
+                    lbl_detalhe.value = "-"
+            
             card_resultado.visible = True
-
-        except ValueError:
-            lbl_total.value = "Erro numérico"
-            lbl_desc.value = "Digite apenas números inteiros"
-            lbl_total.size = 30
-            lbl_total.color = "red"
+            page.update()
+        except:
+            lbl_total.value = "Erro Números"
             card_resultado.visible = True
-        
-        page.update()
+            page.update()
 
-    # --- 3. MONTAGEM DA TELA (Interface Bonita) ---
-    
-    # Cabeçalho
-    header = ft.Container(
-        content=ft.Column([
-            ft.Text("Controle de Estoque", size=22, weight="bold", color="white"),
-            txt_status # Mostra se carregou ou deu erro
-        ]),
-        margin=ft.margin.only(bottom=20)
-    )
-
-    # Entradas
+    # Componentes Visuais
     dropdown_tanques = ft.Dropdown(
-        label="Selecione o Tanque",
-        options=[ft.dropdown.Option(nome) for nome in CONFIG_TANQUES.keys()],
-        on_change=mudar_dropdown,
-        color="white", border_color="#007bff", bgcolor="#2d2d2d",
-        text_size=16
+        label="Tanque", 
+        options=[ft.dropdown.Option(x) for x in CONFIG_TANQUES.keys()],
+        on_change=mudar_dropdown, color="white", bgcolor="#2d2d2d"
     )
-
-    txt_regua_1 = ft.TextField(
-        label="Régua (cm)", keyboard_type=ft.KeyboardType.NUMBER, 
-        color="white", border_color="white", text_align="center", text_size=18
-    )
-
-    # Campo extra para o Tanque B (Soma)
-    txt_regua_2 = ft.TextField(
-        label="Régua T02B (cm)", keyboard_type=ft.KeyboardType.NUMBER, 
-        color="white", border_color="white", text_align="center", text_size=18
-    )
+    txt_regua_1 = ft.TextField(label="Régua (cm)", keyboard_type="NUMBER", color="white", text_align="center")
+    txt_regua_2 = ft.TextField(label="Régua T02B (cm)", keyboard_type="NUMBER", color="white", text_align="center")
     container_soma = ft.Container(content=txt_regua_2, visible=False)
-
-    btn_calcular = ft.ElevatedButton(
-        text="CONSULTAR", width=300, height=55, 
-        bgcolor="#007bff", color="white", 
-        on_click=calcular,
-        style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=10))
-    )
-
-    # Resultado
-    lbl_desc = ft.Text("Resultado", color="grey", size=14)
-    lbl_total = ft.Text("-", size=40, weight="bold", color="#007bff")
-    lbl_detalhe = ft.Text("-", color="white", size=14)
-
+    
+    btn_calcular = ft.ElevatedButton("CONSULTAR", bgcolor="blue", color="white", width=300, height=50, on_click=calcular)
+    
+    lbl_total = ft.Text("-", size=35, weight="bold", color="blue")
+    lbl_detalhe = ft.Text("-", color="white")
     card_resultado = ft.Container(
-        content=ft.Column([
-            lbl_desc,
-            lbl_total,
-            ft.Divider(color="grey"),
-            lbl_detalhe
-        ], horizontal_alignment="center"),
-        bgcolor="#2d2d2d", padding=25, border_radius=15, visible=False, width=320,
-        border=ft.border.all(1, "#444444")
+        content=ft.Column([lbl_total, lbl_detalhe], horizontal_alignment="center"),
+        bgcolor="#333333", padding=20, border_radius=10, visible=False
     )
 
-    # Adiciona tudo na tela PRIMEIRO
+    # --- TELA INICIAL (IGUAL AO DIAGNÓSTICO QUE FUNCIONOU) ---
+    btn_entrar = ft.ElevatedButton(
+        "ABRIR SISTEMA", 
+        bgcolor="green", 
+        color="white", 
+        width=250, 
+        height=60,
+        on_click=abrir_sistema
+    )
+
     page.add(
         ft.Column([
-            header,
-            dropdown_tanques,
-            ft.Container(height=10),
-            txt_regua_1,
-            ft.Container(height=5),
-            container_soma,
-            ft.Container(height=20),
-            btn_calcular,
-            ft.Container(height=25),
-            card_resultado
-        ], horizontal_alignment="center")
+            ft.Icon(ft.icons.LOCAL_GAS_STATION, size=60, color="blue"),
+            ft.Text("Posto Gestão", size=25, weight="bold", color="white"),
+            ft.Container(height=30),
+            btn_entrar,
+            ft.Text("\nToque para iniciar", color="grey")
+        ], horizontal_alignment="center", alignment="center")
     )
-
-    # AGORA carrega os arquivos (com a tela já aberta)
-    carregar_arquivos_seguro()
 
 ft.app(target=main, assets_dir="assets")
