@@ -1,4 +1,4 @@
-name: Fabrica de APK
+name: Build Android APK
 on: [push]
 
 jobs:
@@ -6,23 +6,34 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Baixar Código
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
+
+      - name: Instalar Java (Obrigatório para Android)
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Instalar Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
 
       - name: Instalar Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
           python-version: '3.11'
 
-      - name: Instalar Ferramentas
+      - name: Instalar o Flet
         run: |
           pip install flet
-          pip install -r requirements.txt
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
 
-      - name: Fabricar APK (Isso demora uns 5min)
-        run: flet build apk --no-android-signing
+      - name: Fabricar o APK
+        run: flet build apk --no-android-signing --include-packages flet
 
       - name: Guardar o APK pronto
         uses: actions/upload-artifact@v4
         with:
-          name: aplicativo-tanque
+          name: app-tanque-v2
           path: build/apk/app-release.apk
